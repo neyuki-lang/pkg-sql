@@ -739,6 +739,28 @@ enum Cell {
     List(Vec<Cell>),
 }
 
+/// A list that keeps its NULL elements as holes, so `{1, NULL, 3}` has
+/// length 3 and `arr[3]` is 3. Setting nil past the end of a table does not
+/// grow it, so each hole is filled with a placeholder first and cleared once
+/// the rest is in. A trailing NULL is left out of `#`, as in a constructor.
+fn list_with_holes(values: Vec<Value>) -> Result<Table, String> {
+    let table = Table::with_capacity(values.len(), 0)?;
+    let mut holes = Vec::new();
+    for (i, value) in values.into_iter().enumerate() {
+        let index = i as i64 + 1;
+        if value.is_nil() {
+            holes.push(index);
+            table.set(index, false)?;
+        } else {
+            table.set(index, value)?;
+        }
+    }
+    for index in holes {
+        table.set(index, Value::Nil)?;
+    }
+    Ok(table)
+}
+
 impl Cell {
     fn into_value(self) -> Result<Value, String> {
         Ok(match self {
@@ -747,7 +769,7 @@ impl Cell {
             Cell::Int(value) => Value::Int(value),
             Cell::Float(value) => Value::Float(value),
             Cell::Text(value) => Value::from(value),
-            Cell::List(items) => Value::from(Table::from_list(
+            Cell::List(items) => Value::from(list_with_holes(
                 items
                     .into_iter()
                     .map(Cell::into_value)

@@ -218,7 +218,7 @@ if (postgresUrl != nil) then
     local row = db:queryOne("SELECT 1::int2 AS i2, 2::int8 AS i8, 1.5::float4 AS f4, 12345678901234567890.123::numeric AS n, " ..
         "'2024-02-29'::date AS d, '12:34:56.5'::time AS t, '2024-02-29 12:34:56'::timestamp AS ts, " ..
         "'2024-02-29 12:34:56+02'::timestamptz AS tz, 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::uuid AS u, " ..
-        "'{\"a\": 1}'::jsonb AS j, ARRAY[1, 2, NULL]::int[] AS arr, 'x'::bytea AS b, $1::int + 1 AS p, $2::text AS s, $3::bool AS f",
+        "'{\"a\": 1}'::jsonb AS j, ARRAY[1, NULL, 3]::int[] AS arr, 'x'::bytea AS b, $1::int + 1 AS p, $2::text AS s, $3::bool AS f",
         { 41, "hi", false })
     assert(row.i2 == 1 and row.i8 == 2 and row.f4 == 1.5, "small numeric types should decode")
     assert(row.n == "12345678901234567890.123", "numeric should keep every digit: " .. tostring(row.n))
@@ -226,7 +226,7 @@ if (postgresUrl != nil) then
     assert(row.tz == "2024-02-29 10:34:56+00", "timestamptz should be reported in UTC: " .. tostring(row.tz))
     assert(row.u == "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11", "uuid should be hyphenated")
     assert(row.j == "{\"a\": 1}", "jsonb should be its text")
-    assert(#row.arr == 3 and row.arr[1] == 1 and row.arr[2] == 2 and row.arr[3] == nil, "arrays should become arrays")
+    assert(#row.arr == 3 and row.arr[1] == 1 and row.arr[2] == nil and row.arr[3] == 3, "arrays should become arrays, NULLs as holes")
     assert(row.b == "x" and row.p == 42 and row.s == "hi" and row.f == false, "parameters should convert to the inferred type")
     local ok2, err2 = try(db.query, db, "SELECT '1 day'::interval AS i")
     assert(not ok2 and string.find(err2, "cast it to text", 1, true) != nil, "unsupported types should explain the fix: " .. tostring(err2))

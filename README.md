@@ -34,7 +34,7 @@ db:close()
 
 Parameters are positional in the database's own syntax (`$1, $2` on PostgreSQL, `?` on MySQL and SQLite, which also takes `?1, ?2`) and are sent separately from the SQL text, so values are never spliced into it. A parameter may be `nil` (NULL), a boolean, a number or a string.
 
-Results keep their types: integers stay integers, floats stay floats, PostgreSQL booleans are booleans (MySQL's and SQLite's are `0` and `1`), text is a string and a PostgreSQL array is an array. `numeric`/`decimal` come back as strings so no digit is rounded; dates, times, timestamps, `uuid` and `json` come back in their text form (`timestamptz` in UTC). A NULL column is absent from its row. Types the module does not know (`interval`, `inet`, ranges, composites) raise an error naming them; cast them to `text` in the query. SQLite values keep their storage class (`INTEGER`, `REAL`, `TEXT`), and a `BLOB` comes back as a string.
+Results keep their types: integers stay integers, floats stay floats, PostgreSQL booleans are booleans (MySQL's and SQLite's are `0` and `1`), text is a string and a PostgreSQL array is an array (a NULL element is a hole, and a trailing one is left out of `#`). `numeric`/`decimal` come back as strings so no digit is rounded; dates, times, timestamps, `uuid` and `json` come back in their text form (`timestamptz` in UTC). A NULL column is absent from its row. Types the module does not know (`interval`, `inet`, ranges, composites) raise an error naming them; cast them to `text` in the query. SQLite values keep their storage class (`INTEGER`, `REAL`, `TEXT`), and a `BLOB` comes back as a string.
 
 ## sql.connect(target: string | table): Connection
 

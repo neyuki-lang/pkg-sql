@@ -246,6 +246,6 @@ if (mysqlUrl != nil) then
     assert(row.n == "12345678901234567890.123", "decimal should keep every digit: " .. tostring(row.n))
     assert(row.d == "2024-02-29" and row.ts == "2024-02-29 12:34:56" and row.t == "12:34:56.5", "dates and times should read like the server prints them")
     assert(row.p == 42 and row.s == "hi", "parameters should bind")
-    assert(row.u == 18446744073709551615, "unsigned bigints should not overflow: " .. tostring(row.u) .. " (" .. type(row.u) .. ")")
+    assert(row.u == 18446744073709551615, "unsigned bigints should not overflow: " .. tostring(row.u))
     db:close()
 end

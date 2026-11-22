@@ -1098,8 +1098,17 @@ fn my_params(params: &[Value]) -> Result<mysql::Params, String> {
                 Value::Nil => mysql::Value::NULL,
                 Value::Bool(value) => mysql::Value::Int(i64::from(*value)),
                 Value::Int(value) => mysql::Value::Int(*value),
-                // Past i64 the server parses the digits itself (DECIMAL).
-                Value::BigInt(_) => mysql::Value::Bytes(neyuki_ext::to_string(value)?.into_bytes()),
+                // Up to u64 an unsigned integer: MySQL types a placeholder
+                // when it prepares the statement (a BIGINT in `CAST(? AS
+                // UNSIGNED)`), so digits past i64 would be clamped to it.
+                // Beyond u64 the server parses the digits itself (DECIMAL).
+                Value::BigInt(_) => {
+                    let digits = neyuki_ext::to_string(value)?;
+                    match digits.parse::<u64>() {
+                        Ok(unsigned) => mysql::Value::UInt(unsigned),
+                        Err(_) => mysql::Value::Bytes(digits.into_bytes()),
+                    }
+                }
                 Value::Float(value) => mysql::Value::Double(*value),
                 Value::String(value) => mysql::Value::Bytes(value.as_bytes().to_vec()),
                 other => {

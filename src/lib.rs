@@ -118,26 +118,20 @@ fn params_arg(args: &[Value], index: usize) -> Result<Vec<Value>, String> {
     match args.get(index) {
         None | Some(Value::Nil) => Ok(Vec::new()),
         Some(Value::Table(table)) => {
-            let mut params = Vec::new();
-            for (key, value) in table.pairs()? {
-                let index = match key {
-                    Value::Int(index) if (1..=MAX_PARAMS as i64).contains(&index) => index as usize,
-                    Value::Int(index) if index > MAX_PARAMS as i64 => {
-                        return Err(format!("more than {} params", MAX_PARAMS));
-                    }
-                    _ => {
-                        return Err(
-                            "params must be an array; named parameters are not supported"
-                                .to_string(),
-                        );
-                    }
-                };
-                if params.len() < index {
-                    params.resize(index, Value::Nil);
-                }
-                params[index - 1] = value;
+            // `len` is the array part as the constructor built it, so a
+            // trailing nil (`{ "a", nil }`) still counts as a parameter.
+            let len = table.len();
+            if len > MAX_PARAMS {
+                return Err(format!("more than {} params", MAX_PARAMS));
             }
-            Ok(params)
+            for (key, _) in table.pairs()? {
+                if !matches!(key, Value::Int(index) if (1..=len as i64).contains(&index)) {
+                    return Err(
+                        "params must be an array; named parameters are not supported".to_string(),
+                    );
+                }
+            }
+            table.list()
         }
         Some(value) => Err(format!("params must be a table, got {}", value.type_name())),
     }

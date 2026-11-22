@@ -60,6 +60,8 @@ do
     affected, lastId = mem:execute("UPDATE people SET score = score + 1 WHERE score IS NOT NULL")
     assert(affected == 1 and lastId == nil, "an update should count its rows but set no rowid")
 
+    local nilRow = mem:queryOne("SELECT ? AS a, ? AS b", { "x", nil })
+    assert(nilRow != nil and nilRow.a == "x" and nilRow.b == nil, "a trailing nil parameter should bind as NULL")
     assert(not try(mem.execute, mem, "INSERT INTO people (name) VALUES (?)", {}), "too few parameters should error")
     assert(not try(mem.query, mem, "SELECT ?", { 1, 2 }), "too many parameters should error")
     assert(not try(mem.query, mem, "SELECT 1; SELECT 2"), "query should take one statement")
@@ -235,7 +237,7 @@ local mysqlUrl = liveUrls.mysql
 if (mysqlUrl != nil) then
     local db = sql.connect(mysqlUrl)
     assert(db.driver == "mysql")
-    exercise(db, function(n: number): string return "?" end)
+    exercise(db, function(_n: number): string return "?" end)
 
     db = sql.connect(mysqlUrl)
     local row = db:queryOne("SELECT CAST(12345678901234567890.123 AS DECIMAL(30, 3)) AS n, DATE('2024-02-29') AS d, " ..

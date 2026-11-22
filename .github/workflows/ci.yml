@@ -1,0 +1,136 @@
+name: CI
+
+# Builds the native library for every target the runtime releases for, runs
+# the tests on Linux, and on a tag v<version> publishes the package with the
+# libraries of all targets.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  native:
+    name: Native (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-22.04,     target: x86_64-unknown-linux-gnu }
+          - { os: ubuntu-22.04-arm, target: aarch64-unknown-linux-gnu }
+          - { os: macos-latest,     target: aarch64-apple-darwin }
+          - { os: macos-latest,     target: x86_64-apple-darwin }
+          - { os: windows-latest,   target: x86_64-pc-windows-msvc }
+          - { os: windows-latest,   target: aarch64-pc-windows-msvc }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - run: rustup target add ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - name: Build and stage
+        run: TARGET=${{ matrix.target }} scripts/stage.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.target }}
+          path: native/
+
+  lint:
+    name: Rust format and clippy
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+
+  test:
+    name: Package tests
+    runs-on: ubuntu-22.04
+    # Live servers for the round trips in tests/sql.nyk, which reads their
+    # URLs from tests/sql.local.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: pass
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: pass
+          MYSQL_DATABASE: test
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -ppass"
+          --health-interval 5s --health-timeout 5s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - run: git clone --depth 1 https://github.com/neyuki-lang/neyuki "$RUNNER_TEMP/neyuki"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+            ${{ runner.temp }}/neyuki
+      # The packages need nothing from the runtime's optional features, so
+      # the runtime builds without the GTK/WebKit and ALSA headers.
+      - name: Build the runtime
+        run: cargo build --release --no-default-features --manifest-path "$RUNNER_TEMP/neyuki/Cargo.toml"
+      - name: Stage the host libraries
+        run: scripts/stage.sh
+      - name: Lint and test
+        run: |
+          set -e
+          neyuki="$RUNNER_TEMP/neyuki/target/release/neyuki"
+          for file in *.nyk tests/*.nyk sandbox/*.nyk; do "$neyuki" lint "$file"; done
+          printf '%s\n' \
+            "postgres=postgres://postgres:pass@127.0.0.1:5432/postgres" \
+            "mysql=mysql://root:pass@127.0.0.1:3306/test" > tests/sql.local
+          "$neyuki" test
+      - name: SQLite under the sandbox
+        run: |
+          set -e
+          dir=$(mktemp -d)
+          outside=$(mktemp -d)
+          "$RUNNER_TEMP/neyuki/target/release/neyuki" --sandbox --allow-read=".,$dir" \
+            --allow-write="$dir" --allow-ffi sandbox/sqlite.nyk "$dir" "$outside/out.db"
+          test ! -e "$outside/out.db"
+
+  publish:
+    name: Publish
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [native, lint, test]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: git clone --depth 1 https://github.com/neyuki-lang/neyuki "$RUNNER_TEMP/neyuki"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ${{ runner.temp }}/neyuki
+      - run: cargo build --release --no-default-features --manifest-path "$RUNNER_TEMP/neyuki/Cargo.toml"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: native-*
+          merge-multiple: true
+          # Uploads keep paths relative to native/, so put that back.
+          path: native
+      - name: Publish
+        env:
+          NEYUKI_TOKEN: ${{ secrets.NEYUKI_TOKEN }}
+        run: |
+          version=${GITHUB_REF_NAME#v}
+          grep -q "^version = \"$version\"" neyuki.toml \
+            || { echo "neyuki.toml is not at version $version" >&2; exit 1; }
+          "$RUNNER_TEMP/neyuki/target/release/neyuki" pkg publish

@@ -1,0 +1,6 @@
+# The Rust sources build native/; the package ships the libraries.
+src/
+scripts/
+sandbox/
+Cargo.toml
+Cargo.lock

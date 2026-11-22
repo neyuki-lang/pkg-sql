@@ -1,0 +1,41 @@
+-- The SQLite sandbox checks, run by CI as
+--   neyuki --sandbox --allow-read=.,<dir> --allow-write=<dir> --allow-ffi sandbox/sqlite.nyk <dir> <outside>
+-- where <dir> is writable scratch space and <outside> a file path in an
+-- existing directory outside it.
+-- (They need the runtime's sandbox, so they cannot be Rust unit tests.)
+local sql = require("@pkg/nyk/sql")
+local os = require("@neyuki/os")
+local string = require("@neyuki/string")
+
+local args = os.args()
+local dir, outside = args[1], args[2]
+assert(dir != nil and outside != nil, "usage: sqlite.nyk <dir> <outside>")
+
+local function fails(f, ...)
+    local ok, err = try(f, ...)
+    assert(not ok, "expected an error")
+    return tostring(err)
+end
+
+-- `:memory:` needs no file access.
+sql.connect("sqlite::memory:"):close()
+
+-- A file outside the allowed directory is refused before it is opened,
+-- also when its path is percent-encoded in a file: URI.
+assert(string.find(fails(sql.connect, "sqlite://" .. outside), "permission denied", 1, true), "outside file")
+local encoded = string.gsub(outside, "/", "%%2F")
+for _, url in { "sqlite:file:" .. encoded, "sqlite://file:" .. encoded } do
+    assert(string.find(fails(sql.connect, url), "permission denied", 1, true), url)
+end
+
+-- Inside the directory it opens, but SQL cannot reach other files.
+local db = sql.connect("sqlite://" .. dir .. "/a.db")
+db:execute("CREATE TABLE t (a)")
+assert(not try(db.execute, db, "ATTACH DATABASE '" .. outside .. "' AS x"), "ATTACH outside")
+assert(not try(db.execute, db, "ATTACH DATABASE 'file:" .. encoded .. "' AS x"), "ATTACH encoded outside")
+assert(not try(db.execute, db, "VACUUM INTO '" .. outside .. "'"), "VACUUM INTO outside")
+db:execute("ATTACH DATABASE ':memory:' AS m")
+db:execute("ATTACH DATABASE '" .. dir .. "/b.db' AS b")
+db:close()
+
+print("[pass] sqlite sandbox")

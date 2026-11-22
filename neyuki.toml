@@ -1,0 +1,17 @@
+[package]
+name = "@nyk/sql"
+version = "0.1.0"
+description = "PostgreSQL, MySQL, MariaDB and SQLite through native Rust drivers, with prepared statements"
+entry = "init.nyk"
+license = "MIT"
+repository = "https://github.com/neyuki-lang/pkg-sql"
+keywords = ["sql", "database", "postgres", "mysql", "sqlite"]
+
+[native]
+abi = 2
+x86_64-linux = "native/x86_64-linux/libnyk_sql.so"
+aarch64-linux = "native/aarch64-linux/libnyk_sql.so"
+x86_64-macos = "native/x86_64-macos/libnyk_sql.dylib"
+aarch64-macos = "native/aarch64-macos/libnyk_sql.dylib"
+x86_64-windows = "native/x86_64-windows/nyk_sql.dll"
+aarch64-windows = "native/aarch64-windows/nyk_sql.dll"

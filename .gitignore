@@ -1,0 +1,6 @@
+/target
+neyuki_packages/
+neyuki.lock
+# Built by scripts/stage.sh; a release adds every target in CI.
+/native/
+tests/sql.local

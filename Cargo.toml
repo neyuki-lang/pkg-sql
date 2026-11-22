@@ -1,0 +1,40 @@
+[package]
+name = "nyk-sql"
+version = "0.1.0"
+description = "The native library of @nyk/sql"
+publish = false
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/neyuki-lang/pkg-sql"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# The Neyuki extension SDK (ABI 2).
+neyuki-ext = "0.1"
+# PostgreSQL and MySQL/MariaDB through native Rust drivers (no libpq or
+# libmysqlclient), with TLS through the platform `native-tls` (SChannel,
+# Secure Transport, OpenSSL on Linux). The `mysql` defaults are dropped:
+# their `minimal` feature forces the stock C zlib onto `flate2`, and
+# `derive` is unused; `minimal-rust` keeps a pure-Rust zlib. `postgres-
+# protocol` decodes the wire values that the `postgres` crate leaves to
+# companion crates (dates, uuids, arrays).
+postgres = "0.19"
+postgres-native-tls = "0.5"
+postgres-protocol = "0.6"
+native-tls = "0.2"
+fallible-iterator = "0.2"
+mysql = { version = "28", default-features = false, features = ["minimal-rust", "native-tls", "buffer-pool"] }
+# Naming `flate2` with `zlib-rs` gives the MySQL compressed protocol the
+# pure-Rust zlib, which needs no C compiler or CMake.
+flate2 = { version = "1.1", default-features = false, features = ["zlib-rs"] }
+# SQLite runs in-process: `bundled` compiles the SQLite amalgamation into
+# the library (needs only a C compiler), so no system libsqlite3 is used.
+rusqlite = { version = "0.43", features = ["bundled", "hooks"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
